@@ -1,5 +1,5 @@
 // Guarda el juego en el teléfono para que abra rápido y se pueda jugar solo sin internet.
-const CACHE = 'splash-calabaza-v4';
+const CACHE = 'splash-calabaza-v5';
 const FILES = ['./', './index.html', './config.js', './manifest.webmanifest', './vendor/three/three.module.js',
   './vendor/three/addons/BufferGeometryUtils.js', './vendor/three/addons/RoundedBoxGeometry.js', './vendor/supabase.js',
   './icons/icon-192.png', './icons/icon-512.png'];
