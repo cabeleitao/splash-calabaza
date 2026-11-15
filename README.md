@@ -6,9 +6,13 @@ Videojuego 3D para el navegador: elegí tu personaje (Almen, Carme, Facu o Indi)
 - Modo solo y multijugador (2 a 4 jugadores) con código de partida o link de invitación.
 - Sitio estático: no necesita compilar nada.
 
-## Multijugador
-Usa Supabase Realtime (presence), sin tablas. Completá `config.js` con la URL y la *anon key* del proyecto
-(Supabase → Project Settings → API). La anon key es pública por diseño.
+## Servidor (Supabase, proyecto `splash-calabaza`)
+- **Partidas en vivo:** Supabase Realtime (presence + broadcast), con reconexión automática.
+- **Cuentas sin mail:** usuario y contraseña propios del juego (contraseña cifrada con bcrypt). Amigos con solicitud
+  y aceptación; cada uno ve solo las partidas por empezar de sus amigos. Monedas acumuladas por cuenta y tienda
+  (personajes ocultos, martillos, músicas). Todo con funciones de base de datos: las tablas no se leen desde el navegador.
+- El esquema completo está en `supabase/schema.sql`. La configuración (URL y clave pública) en `config.js`.
+- Si un chico se olvida la contraseña, un adulto puede borrar la cuenta desde Supabase (tabla `sc_users`) y crearla de nuevo.
 
 ## Publicar
 Importar el repo en Vercel (Framework: *Other*, sin build). Cada `git push` publica solo.
