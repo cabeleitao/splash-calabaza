@@ -124,6 +124,10 @@ body.ingame #mute{display:none}
 .pop{position:fixed;font-family:'Gochi Hand';font-size:clamp(30px,8vw,52px);color:#fff;-webkit-text-stroke:2px var(--ink);text-shadow:0 4px 0 var(--ink);pointer-events:none;animation:pop 0.9s ease-out forwards;white-space:nowrap;transform:translate(-50%,-50%)}
 .pop.miss{font-size:22px;color:#ffe;opacity:.8}
 @keyframes pop{0%{transform:translate(-50%,-50%) scale(.4) rotate(-8deg);opacity:0}20%{transform:translate(-50%,-60%) scale(1.15) rotate(4deg);opacity:1}100%{transform:translate(-50%,-150%) scale(1) rotate(0);opacity:0}}
+#penUI{position:fixed;left:0;right:0;top:26%;display:none;flex-direction:column;align-items:center;gap:10px;pointer-events:none;text-align:center}
+#penUI.on{display:flex}
+#penUI .big{font-size:clamp(40px,11vw,80px)}
+#penSub{font-weight:800;font-size:clamp(18px,4.8vw,26px);color:#fff;-webkit-text-stroke:1px var(--ink);text-shadow:0 3px 0 var(--ink);background:rgba(0,0,0,.18);border-radius:14px;padding:4px 14px}
 #giantUI{position:fixed;left:0;right:0;bottom:calc(max(12px,env(safe-area-inset-bottom)) + clamp(78px,13vh,118px) + 30px);display:none;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
 #giantUI.on{display:flex}
 #hitBars{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
@@ -286,6 +290,7 @@ body.ingame #mute{display:none}
 </div>
 
 <div id="count" class="banner"><div class="big" id="countN">3</div><div id="hint"></div></div>
+<div id="penUI"><div class="big" id="penMsg">⚽ ¡PENAL!</div><div id="penSub"></div></div>
 <div id="giantUI"><div class="big" style="font-size:clamp(28px,7vw,48px)" id="giantMsg">¡Pegale a la calabaza gigante!</div><div id="hitBars"></div></div>
 <div id="flash"></div>
 <div id="confirm" class="scr"><div class="card"><h2>¿Abandonar la partida?</h2><p>Vas a volver al menú principal.</p>
@@ -606,6 +611,83 @@ const VINE_X=1.75;
     m4.compose(p,q,sc); leaves.setMatrixAt(k++, m4); }
   leaves.count=k; leaves.castShadow=true; scene.add(leaves);
 })();
+/* ---------- desafío de Facu: pelota de fútbol y penal ---------- */
+const ballTex=canvasTex(512,256,(x,w,h)=>{ x.fillStyle='#ffffff'; x.fillRect(0,0,w,h); x.fillStyle='#1a1a1a';
+  const pent=(cx,cy,r)=>{ x.beginPath(); for(let k=0;k<5;k++){ const a=k/5*Math.PI*2-Math.PI/2; x.lineTo(cx+Math.cos(a)*r, cy+Math.sin(a)*r*1.2); } x.closePath(); x.fill(); };
+  for(let row=0;row<3;row++) for(let i=0;i<6;i++){ pent(i*w/6+(row%2?w/12:0)+20, 30+row*h/3, 26); }
+  x.strokeStyle='#555'; x.lineWidth=3; for(let i=0;i<12;i++){ x.beginPath(); x.moveTo(i*w/12,0); x.lineTo(i*w/12+30,h); x.stroke(); } });
+const ballMat=toon(0xffffff,{map:ballTex}); const BALLGEO=new THREE.SphereGeometry(1,32,24);
+function makeBall(r){ const g=new THREE.Group(); const m=new THREE.Mesh(BALLGEO,ballMat.clone()); m.castShadow=true; g.add(m); const o=new THREE.Mesh(BALLGEO,OL(0.03)); o.userData.ol=true; g.add(o); g.scale.setScalar(r); g.userData.body=m; return g; }
+function makeBallTarget(side){ const g=new THREE.Group(); const cluster=new THREE.Group(); g.add(cluster);
+  const ball=makeBall(0.62); ball.position.set(-side*0.3,0.7,0); cluster.add(ball);
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(0.9,0.06,8,40), new THREE.MeshBasicMaterial({color:0xffe14a})); ring.rotation.x=Math.PI/2; ring.position.set(-side*0.3,0.05,0); cluster.add(ring);
+  g.position.x=side*VINE_X; g.userData={cluster, main:ball, ball:true}; return g; }
+// escena del penal
+const pScene=new THREE.Scene(); pScene.background=new THREE.Color(0x9fd8ff); pScene.fog=new THREE.Fog(0x9fd8ff,30,70);
+const pCam=new THREE.PerspectiveCamera(50,1,0.05,200);
+pScene.add(new THREE.HemisphereLight(0xffffff,0x5a9a40,1.6));
+const pDir=new THREE.DirectionalLight(0xffffff,1.6); pDir.position.set(4,10,6); pDir.castShadow=true; pDir.shadow.mapSize.set(1024,1024); Object.assign(pDir.shadow.camera,{left:-8,right:8,top:8,bottom:-8}); pScene.add(pDir);
+const PEN={ GZ:-11, W:3.6, H:2.3 };
+(function buildPitch(){
+  const grass=canvasTex(512,512,(x,w,h)=>{ for(let i=0;i<8;i++){ x.fillStyle=i%2?'#5fae46':'#6cbf50'; x.fillRect(0,i*h/8,w,h/8); } x.strokeStyle='rgba(255,255,255,.9)'; x.lineWidth=6; },[4,4]);
+  const f=new THREE.Mesh(new THREE.PlaneGeometry(60,60), toon(0xffffff,{map:grass})); f.rotation.x=-Math.PI/2; f.position.z=-10; f.receiveShadow=true; pScene.add(f);
+  const lineM=new THREE.MeshBasicMaterial({color:0xffffff});
+  const area=(w,d)=>{ const pts=[[-w,0],[-w,d],[w,d],[w,0]]; for(let i=0;i<3;i++){ const [a,b]=[pts[i],pts[i+1]]; const len=Math.hypot(b[0]-a[0],b[1]-a[1]); const m=new THREE.Mesh(new THREE.PlaneGeometry(i===1?len:0.1, i===1?0.1:len), lineM); m.rotation.x=-Math.PI/2; m.position.set((a[0]+b[0])/2,0.01,PEN.GZ+(a[1]+b[1])/2); pScene.add(m); } };
+  area(9,5.5); area(18,16);
+  const gl=new THREE.Mesh(new THREE.PlaneGeometry(40,0.1), lineM); gl.rotation.x=-Math.PI/2; gl.position.set(0,0.01,PEN.GZ); pScene.add(gl);
+  const spot=new THREE.Mesh(new THREE.CircleGeometry(0.12,16), lineM); spot.rotation.x=-Math.PI/2; spot.position.set(0,0.012,0); pScene.add(spot);
+  const postM=toon(0xffffff); const r=0.07;
+  for(const sx of [-1,1]){ const p=new THREE.Mesh(new THREE.CylinderGeometry(r,r,PEN.H,12),postM); p.position.set(sx*PEN.W,PEN.H/2,PEN.GZ); p.castShadow=true; pScene.add(p); }
+  const bar=new THREE.Mesh(new THREE.CylinderGeometry(r,r,PEN.W*2+r*2,12),postM); bar.rotation.z=Math.PI/2; bar.position.set(0,PEN.H,PEN.GZ); bar.castShadow=true; pScene.add(bar);
+  const netT=canvasTex(256,256,(x,w,h)=>{ x.clearRect(0,0,w,h); x.strokeStyle='rgba(255,255,255,.85)'; x.lineWidth=3; for(let i=0;i<=w;i+=16){ x.beginPath(); x.moveTo(i,0); x.lineTo(i,h); x.stroke(); x.beginPath(); x.moveTo(0,i); x.lineTo(w,i); x.stroke(); } },[6,3]);
+  const netM=new THREE.MeshBasicMaterial({map:netT,transparent:true,side:THREE.DoubleSide,depthWrite:false});
+  const back=new THREE.Mesh(new THREE.PlaneGeometry(PEN.W*2,PEN.H),netM); back.position.set(0,PEN.H/2,PEN.GZ-1.6); pScene.add(back);
+  const roof=new THREE.Mesh(new THREE.PlaneGeometry(PEN.W*2,1.6),netM); roof.rotation.x=Math.PI/2; roof.position.set(0,PEN.H,PEN.GZ-0.8); pScene.add(roof);
+  for(const sx of [-1,1]){ const sd=new THREE.Mesh(new THREE.PlaneGeometry(1.6,PEN.H),netM); sd.rotation.y=Math.PI/2; sd.position.set(sx*PEN.W,PEN.H/2,PEN.GZ-0.8); pScene.add(sd); }
+  // tribuna de fondo
+  const crowd=canvasTex(1024,256,(x,w,h)=>{ x.fillStyle='#3a4a7a'; x.fillRect(0,0,w,h); const r=mulberry32(5); const cs=['#f07a1a','#ffd23a','#e8303a','#ffffff','#5eb0e6','#7cc05a'];
+    for(let i=0;i<700;i++){ x.fillStyle=cs[i%cs.length]; x.beginPath(); x.arc(r()*w, 20+r()*(h-30), 6+r()*4, 0, 7); x.fill(); } },[3,1]);
+  const st=new THREE.Mesh(new THREE.PlaneGeometry(90,10), new THREE.MeshBasicMaterial({map:crowd})); st.position.set(0,5,-34); pScene.add(st);
+})();
+const keeper=(()=>{ const root=new THREE.Group(); const body=new THREE.Group(); root.add(body);
+  const shirt=0x2fbf5a, skin=0xe3a46a;
+  for(const s of [-1,1]){ const leg=part(new THREE.CapsuleGeometry(0.09,0.55,6,10),0x1a1a1a); leg.position.set(s*0.13,0.42,0); body.add(leg);
+    const boot=part(new THREE.SphereGeometry(0.11,12,10),0x111111); boot.scale.set(1,0.6,1.5); boot.position.set(s*0.13,0.06,0.05); body.add(boot); }
+  const torso=part(new THREE.CylinderGeometry(0.24,0.28,0.65,18),shirt); torso.position.y=1.08; body.add(torso);
+  const arms=[]; for(const s of [-1,1]){ const g=new THREE.Group(); g.position.set(s*0.3,1.35,0); const a=part(new THREE.CapsuleGeometry(0.07,0.45,6,10),shirt); a.position.y=-0.28; g.add(a);
+    const glove=part(new THREE.SphereGeometry(0.12,14,10),0xffe14a); glove.position.y=-0.6; g.add(glove); g.rotation.z=s*0.6; body.add(g); arms.push(g); }
+  const head=makePumpkin(0.42); head.position.y=1.82; body.add(head);
+  const face=canvasTex(256,256,(x,w,h)=>{ x.clearRect(0,0,w,h); x.fillStyle='#2a1208'; const tri=(cx,cy,s)=>{ x.beginPath(); x.moveTo(cx,cy-s); x.lineTo(cx-s,cy+s*0.7); x.lineTo(cx+s,cy+s*0.7); x.fill(); };
+    tri(80,100,30); tri(176,100,30); x.beginPath(); x.moveTo(50,160); for(let i=0;i<=6;i++) x.lineTo(50+i*26,i%2?190:160); x.lineTo(206,160); x.quadraticCurveTo(128,230,50,160); x.fill(); });
+  const fm=new THREE.Mesh(new THREE.PlaneGeometry(0.62,0.62), new THREE.MeshBasicMaterial({map:face,transparent:true})); fm.position.set(0,1.8,0.36); body.add(fm);
+  root.position.set(0,0,PEN.GZ+0.3); root.scale.setScalar(1.15); root.userData={body,arms}; pScene.add(root); return root; })();
+const pBall=makeBall(0.22); pScene.add(pBall);
+function resetPenaltyScene(){ pBall.position.set(0,0.22,0); pBall.rotation.set(0,0,0); keeper.position.set(0,0,PEN.GZ+0.3); keeper.rotation.set(0,0,0); keeper.userData.body.position.y=0;
+  const por=innerWidth<innerHeight; pCam.position.set(0,por?1.55:2.1,por?3.2:4.2); pCam.lookAt(0,por?1.1:0.55,PEN.GZ); }
+function startPenalty(){ if(!G) return; STATE.mode='penalty'; G.pen={ t:0, kicked:false, dir:0, kdir:0, done:false, y:1 }; resetPenaltyScene();
+  $('#penUI').classList.add('on'); $('#penMsg').innerHTML='⚽ ¡PENAL!'; $('#penSub').innerHTML='Pateá con <b>SPLiSH</b> ← o → <b>SPLASH</b>'; sBeep(660,0.2); setTimeout(()=>sBeep(880,0.25),180); }
+function kickPenalty(side){ const P=G&&G.pen; if(!P||P.kicked) return; flashBtn(side); P.kicked=true; P.dir=side; P.kt=0; P.y=0.55+Math.random()*1.25;
+  P.kdir=Math.random()<0.5?-1:1; P.goal=P.kdir!==side; sWhoosh(); $('#penSub').textContent=''; }
+function finishPenalty(){ const P=G.pen; if(P.done) return; P.done=true;
+  const before=G.coins; G.coins= P.goal? G.coins*2 : Math.floor(G.coins/2);
+  $('#penMsg').innerHTML= P.goal? '¡GOOOOL! ⚽🎉' : '¡Atajó el arquero! 🧤'; $('#penSub').innerHTML= P.goal? `Monedas x2: <b>${before} → ${G.coins}</b>` : `Monedas ÷2: <b>${before} → ${G.coins}</b>`;
+  if(P.goal){ sCoin(); setTimeout(sCoin,150); setTimeout(sCoin,300); } else sBeep(220,0.4);
+  $('#meCoins').textContent=G.coins; if(G.multi) setP({coins:G.coins});
+  setTimeout(()=>{ if(!G||STATE.mode!=='penalty') return; $('#penUI').classList.remove('on'); STATE.mode='play'; G.pen=null; }, 2300); }
+function updatePenalty(dt){ const P=G.pen; P.t+=dt; const kb=keeper.userData;
+  // el arquero se mueve de un lado al otro esperando
+  if(!P.kicked){ keeper.position.x=Math.sin(P.t*3)*0.5; kb.arms[0].rotation.z=-0.6-Math.sin(P.t*6)*0.2; kb.arms[1].rotation.z=0.6+Math.sin(P.t*6)*0.2; }
+  else { P.kt+=dt; const t=Math.min(1,P.kt/0.62); const e=t*(2-t);
+    // arquero se tira
+    const kt=Math.min(1,P.kt/0.5); keeper.position.x=lerp(keeper.position.x, P.kdir*1.9, kt*0.25); keeper.rotation.z=lerp(keeper.rotation.z, -P.kdir*1.25, kt*0.3); kb.body.position.y=Math.sin(kt*Math.PI)*0.45;
+    kb.arms[0].rotation.z=lerp(kb.arms[0].rotation.z,-2.8,0.2); kb.arms[1].rotation.z=lerp(kb.arms[1].rotation.z,2.8,0.2);
+    // pelota
+    const tx=P.dir*(P.goal? PEN.W-0.7 : 1.7), tz=PEN.GZ-(P.goal?0.9:-0.4);
+    pBall.position.set(lerp(0,tx,e), 0.22+Math.sin(t*Math.PI)*0.5+(P.y-0.22)*e, lerp(0,tz,e)); pBall.rotation.x-=dt*14;
+    if(!P.goal && t>=1){ pBall.position.z=PEN.GZ+0.3+(P.kt-0.62)*6; pBall.position.y=Math.max(0.22,pBall.position.y-dt*3); }
+    pCam.position.lerp(new THREE.Vector3(0,1.7,-1.5),dt*1.2); pCam.lookAt(0,innerWidth<innerHeight?1.1:0.8,PEN.GZ);
+    if(P.kt>0.75) finishPenalty(); }
+  renderer.render(pScene,pCam); }
 function makeTarget(side){
   const g=new THREE.Group();
   const cluster=new THREE.Group(); g.add(cluster);
@@ -884,7 +966,7 @@ function checkWinner(){
 
 
 /* ================= cuentas, amigos, tienda y monedas ================= */
-const APP_VERSION='v2.0';
+const APP_VERSION='v2.1';
 $('#ver').textContent=APP_VERSION;
 const ACC={ enabled: !!(window.SPLASH_CONFIG||{}).accounts, user:null, guest:false };
 const TOKEN={ get(){ try{ return localStorage.getItem('sc_token'); }catch(e){ return null; } }, set(t){ try{ t? localStorage.setItem('sc_token',t) : localStorage.removeItem('sc_token'); }catch(e){} } };
@@ -976,7 +1058,7 @@ const STATE={ mode:'title' };
 let G=null;
 const SEL={ key:null, multi:false };
 
-function goMenu(){ if(ACC.enabled && !ACC.user && !ACC.guest){ showAuth(); return; } document.body.classList.remove('ingame'); stopMusic(); if(NET.room){ if(NET.host) publishGame('delete'); leaveRoom(); } STATE.mode='title'; G&&cleanupGame(); $('#hud').classList.remove('on'); $('#giantUI').classList.remove('on'); show('title'); renderAcc(); }
+function goMenu(){ $('#penUI').classList.remove('on'); if(ACC.enabled && !ACC.user && !ACC.guest){ showAuth(); return; } document.body.classList.remove('ingame'); stopMusic(); if(NET.room){ if(NET.host) publishGame('delete'); leaveRoom(); } STATE.mode='title'; G&&cleanupGame(); $('#hud').classList.remove('on'); $('#giantUI').classList.remove('on'); show('title'); renderAcc(); }
 $('#bSolo').onclick=()=>{ au(); SEL.multi=false; SEL.key=store.get('sc_char',null); openSelect(); };
 $('#bMulti').onclick=async()=>{ au(); if(ACC.enabled && !ACC.user){ toast('Para jugar con amigos necesitás una cuenta'); showAuth(); return; } show('multi'); STATE.mode='multi'; $('#mStatus').textContent='Conectando…';
   const acc=!!ACC.user; $('#openBox').style.display=acc?'':'none'; $('#mIntro').textContent= acc? 'Creá una partida: tus amigos la van a ver acá abajo y se pueden sumar (de 2 a 4).' : 'Creá una partida y pasale el código a tus amigos (de 2 a 4).'; $('#codeQ').textContent= acc? '¿Tenés un código?' : '¿Te invitaron?'; if(acc){ $('#openList').innerHTML='<p class="muted">Buscando…</p>'; renderOpenGames(); }
@@ -1041,6 +1123,7 @@ function startGame({seed, count, gid=0, multi}){
   const items=[]; let z=-16; let last=0, run=0;
   for(let i=0;i<n;i++){ let side=rng()<0.5?-1:1; if(side===last){ run++; if(run>=3){ side=-side; run=0; } } else run=0; last=side;
     items.push({ z, side, done:false, hit:false, obj:null }); z -= 3.2 + rng()*2.0; }
+  if(SEL.key==='facu'){ const bi=Math.floor(n/2); items[bi].ball=true; }
   G={ seed, count:n, gid, multi, items, camZ:0, speed:0, passed:0, coins:0, char:SEL.key, t:0, swing:null, endZ:z-4, giantZ:z-30, giant:null, giantHits:0, resolved:false, state:'count', shake:0 };
   G.theme=THEME_KEYS[Math.abs(seed)%THEME_KEYS.length]; const th=applyTheme(G.theme); $('#hint').textContent=`${th.icon} ${th.name}`;
   G.arm=buildArm(SEL.key); cam.add(G.arm); resize();
@@ -1068,13 +1151,16 @@ function flashBtn(side){ const b=side<0?$('#bL'):$('#bR'); b.classList.add('hit'
 function act(side){
   if(!G) return;
   if(STATE.mode==='giant'){ hitGiant(); return; }
+  if(STATE.mode==='penalty'){ kickPenalty(side); return; }
   if(STATE.mode!=='play') return;
   flashBtn(side); G.swing={t:0,side}; sWhoosh();
   let best=null, bd=1e9;
   for(let i=G.passed;i<G.items.length && i<G.passed+8;i++){ const it=G.items[i]; if(it.done||it.side!==side) continue; const d=G.camZ-it.z; if(d>-0.6 && d<7.5 && d<bd){ bd=d; best=it; } }
   if(!best) return;
-  best.done=true; best.hit=true; G.coins++;
+  best.done=true; best.hit=true;
   const wp=new THREE.Vector3(); best.obj.userData.main.getWorldPosition(wp); wp.y+=0.2;
+  if(best.ball){ setTimeout(()=>{ if(!G||!best.obj) return; best.obj.userData.cluster.visible=false; popText('⚽ ¡PENAL!', wp); sCoin(); startPenalty(); }, 120); return; }
+  G.coins++;
   setTimeout(()=>{ if(!G||!best.obj) return; burst(wp,46,1.0); burst(wp,14,0.6,1.6); best.obj.userData.cluster.visible=false; sSplat(); sCoin(); spawnCoin(wp);
     popText(side<0?'¡SPLiSH!':'¡SPLASH!', wp); $('#meCoins').textContent=G.coins; const ci=$('#coinIco'); ci.classList.remove('bump'); void ci.offsetWidth; ci.classList.add('bump'); if(G.multi) setP({coins:G.coins}); }, 90);
 }
@@ -1141,7 +1227,7 @@ canvas.addEventListener('pointerdown',e=>{ if(STATE.mode==='play'||STATE.mode===
 addEventListener('keydown',e=>{ if(e.repeat) return; const k=e.key.toLowerCase(); if(k==='arrowleft'||k==='a') act(-1); else if(k==='arrowright'||k==='d') act(1); else if(k===' '&&STATE.mode==='giant') act(0); });
 
 /* ================= bucle ================= */
-function resize(){ const w=innerWidth,h=innerHeight; renderer.setSize(w,h,false); cam.aspect=w/h; cam.fov = w<h? 84:66; cam.updateProjectionMatrix(); dCam.aspect=w/h; dCam.fov = w<h? 50:42; dCam.updateProjectionMatrix(); layoutSelect();
+function resize(){ const w=innerWidth,h=innerHeight; renderer.setSize(w,h,false); pCam.aspect=w/h; pCam.fov= w<h? 70:50; pCam.updateProjectionMatrix(); cam.aspect=w/h; cam.fov = w<h? 84:66; cam.updateProjectionMatrix(); dCam.aspect=w/h; dCam.fov = w<h? 50:42; dCam.updateProjectionMatrix(); layoutSelect();
   if(G&&G.arm){ const portrait=w<h; G.arm.position.set(portrait?0.14:0.46, portrait?-0.34:-0.3, -1.1); G.arm.scale.setScalar(portrait?0.9:1); } }
 addEventListener('resize',resize);
 
@@ -1160,7 +1246,7 @@ function updateGame(dt){
   G.t+=dt;
   const moving = STATE.mode==='play' || (STATE.mode==='giantwalk');
   if(STATE.mode==='play'){
-    const target=3.4+10.5*(G.coins/G.count)+1.2*(G.passed/G.count);   // cuanto más acertás, más rápido vas
+    const target=Math.min(15, 3.4+10.5*(G.coins/G.count)+1.2*(G.passed/G.count));   // cuanto más acertás, más rápido vas
     G.speed=lerp(G.speed,target,dt*1.5); G.camZ-=G.speed*dt;
     while(G.passed<G.items.length && G.items[G.passed].z > G.camZ+0.8){ const it=G.items[G.passed]; if(!it.done){ it.done=true; if(it.obj) popText('¡uy!', it.obj.getWorldPosition(new THREE.Vector3()).setY(0.9),'miss'); } G.passed++; $('#progress').textContent=`🎃 ${G.passed}/${G.count}`; }
     if(G.passed>=G.items.length){ STATE.mode='giantwalk'; G.giant=makeGiant(); }
@@ -1169,7 +1255,7 @@ function updateGame(dt){
   }
   if(STATE.mode==='giant' && G.multi && performance.now()-G.giantAt>30000 && !G.resolved) resolveGiant(false,'');
   // spawn / despawn
-  for(let i=G.passed;i<G.items.length;i++){ const it=G.items[i]; if(it.z < G.camZ-70) break; if(!it.obj){ it.obj=makeTarget(it.side); it.obj.position.z=it.z; scene.add(it.obj); } }
+  for(let i=G.passed;i<G.items.length;i++){ const it=G.items[i]; if(it.z < G.camZ-70) break; if(!it.obj){ it.obj=it.ball? makeBallTarget(it.side) : makeTarget(it.side); it.obj.position.z=it.z; scene.add(it.obj); } }
   for(let i=Math.max(0,G.passed-6);i<G.passed;i++){ const it=G.items[i]; if(it.obj && it.z>G.camZ+6){ scene.remove(it.obj); it.obj=null; } }
   // brillo de la zona de golpe
   for(let i=G.passed;i<Math.min(G.items.length,G.passed+8);i++){ const it=G.items[i]; if(!it.obj||it.done) continue; const d=G.camZ-it.z; const inZ=d>-0.6&&d<7.5;
@@ -1228,6 +1314,7 @@ function loop(){ requestAnimationFrame(loop); const dt=Math.min(clock.getDelta()
   const m=STATE.mode;
   if(['title','multi','select','settings','auth','friends','shop'].includes(m)) updateSelect(dt);
   else if(m==='dance'){ if(G) updateDance(dt); }
+  else if(m==='penalty'){ if(G&&G.pen) updatePenalty(dt); }
   else if(G) updateGame(dt);
 }
 resize(); show('title'); $('#loading').remove(); loop();
