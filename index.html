@@ -679,7 +679,7 @@ function startPenalty(){ if(!G) return; STATE.mode='penalty'; G.pen={ t:0, kicke
 function kickPenalty(side){ const P=G&&G.pen; if(!P||P.kicked) return; flashBtn(side); P.kicked=true; P.dir=side; P.kt=0; P.y=0.55+Math.random()*1.25;
   P.kdir=Math.random()<0.5?-1:1; P.goal=P.kdir!==side; sWhoosh(); $('#penSub').textContent=''; }
 function finishPenalty(){ const P=G.pen; if(P.done) return; P.done=true;
-  const before=G.coins; G.coins= P.goal? G.coins*2 : Math.floor(G.coins/2);
+  const before=G.coins; G.coins= P.goal? G.coins*2 : Math.floor(G.coins/2); G.penRes=P.goal?'gol':'atajada';
   $('#penMsg').innerHTML= P.goal? '¡GOOOOL! ⚽🎉' : '¡Atajó el arquero! 🧤'; $('#penSub').innerHTML= P.goal? `Monedas x2: <b>${before} → ${G.coins}</b>` : `Monedas ÷2: <b>${before} → ${G.coins}</b>`;
   if(P.goal){ sCoin(); setTimeout(sCoin,150); setTimeout(sCoin,300); } else sBeep(220,0.4);
   $('#meCoins').textContent=G.coins; if(G.multi) setP({coins:G.coins});
@@ -976,7 +976,7 @@ function checkWinner(){
 
 
 /* ================= cuentas, amigos, tienda y monedas ================= */
-const APP_VERSION='v2.2';
+const APP_VERSION='v2.3';
 $('#ver').textContent=APP_VERSION;
 const ACC={ enabled: !!(window.SPLASH_CONFIG||{}).accounts, user:null, guest:false };
 const TOKEN={ get(){ try{ return localStorage.getItem('sc_token'); }catch(e){ return null; } }, set(t){ try{ t? localStorage.setItem('sc_token',t) : localStorage.removeItem('sc_token'); }catch(e){} } };
@@ -1134,7 +1134,7 @@ function startGame({seed, count, gid=0, multi}){
   for(let i=0;i<n;i++){ let side=rng()<0.5?-1:1; if(side===last){ run++; if(run>=3){ side=-side; run=0; } } else run=0; last=side;
     items.push({ z, side, done:false, hit:false, obj:null }); z -= 3.2 + rng()*2.0; }
   if(SEL.key==='facu'){ const bi=Math.floor(n/2); items[bi].ball=true; }
-  G={ seed, count:n, gid, multi, items, camZ:0, speed:0, passed:0, coins:0, char:SEL.key, t:0, swing:null, endZ:z-4, giantZ:z-30, giant:null, giantHits:0, resolved:false, state:'count', shake:0 };
+  G={ seed, count:n, gid, multi, items, camZ:0, speed:0, passed:0, coins:0, hits:0, penRes:null, char:SEL.key, t:0, swing:null, endZ:z-4, giantZ:z-30, giant:null, giantHits:0, resolved:false, state:'count', shake:0 };
   G.theme=THEME_KEYS[Math.abs(seed)%THEME_KEYS.length]; const th=applyTheme(G.theme); $('#hint').textContent=`${th.icon} ${th.name}`;
   G.arm=buildArm(SEL.key); cam.add(G.arm); resize();
   $('#meName').textContent=CHARS[SEL.key].name; $('#meCoins').textContent='0'; $('#progress').textContent=`🎃 0/${n}`;
@@ -1170,7 +1170,7 @@ function act(side){
   best.done=true; best.hit=true;
   const wp=new THREE.Vector3(); best.obj.userData.main.getWorldPosition(wp); wp.y+=0.2;
   if(best.ball){ setTimeout(()=>{ if(!G||!best.obj) return; best.obj.userData.cluster.visible=false; popText('⚽ ¡PENAL!', wp); sCoin(); startPenalty(); }, 120); return; }
-  G.coins++;
+  G.coins++; G.hits++;
   setTimeout(()=>{ if(!G||!best.obj) return; burst(wp,46,1.0); burst(wp,14,0.6,1.6); best.obj.userData.cluster.visible=false; sSplat(); sCoin(); spawnCoin(wp);
     popText(side<0?'¡SPLiSH!':'¡SPLASH!', wp); $('#meCoins').textContent=G.coins; const ci=$('#coinIco'); ci.classList.remove('bump'); void ci.offsetWidth; ci.classList.add('bump'); if(G.multi) setP({coins:G.coins}); }, 90);
 }
@@ -1221,7 +1221,7 @@ function renderRank(){
   G.rankTop=rows[0]?.k;
   if(G.multi){ $('#resTitle').textContent='¡Baile final!'; $('#resMsg').textContent = NET.host? 'Podés arrancar la revancha cuando quieran.' : 'Esperando que el anfitrión arranque la revancha…';
     $('#bAgain').style.display=NET.host?'':'none'; $('#bAgain').textContent='Revancha'; }
-  else { const best=store.get('sc_best',0); $('#resTitle').textContent='¡Baile final!'; $('#resMsg').textContent=`Rompiste ${G.coins} de ${G.count} calabazas. Récord: ${Math.max(best,G.fin)} monedas`; $('#bAgain').style.display=''; $('#bAgain').textContent='Jugar otra vez'; }
+  else { const best=store.get('sc_best',0); $('#resTitle').textContent='¡Baile final!'; $('#resMsg').textContent=`Rompiste ${G.hits} de ${G.count} calabazas${G.penRes==='gol'?' · ¡gol de penal, monedas x2!':G.penRes==='atajada'?' · penal atajado, monedas ÷2':''}. Récord: ${Math.max(best,G.fin)} monedas`; $('#bAgain').style.display=''; $('#bAgain').textContent='Jugar otra vez'; }
 }
 $('#bAgain').onclick=()=>{ au(); if(G&&G.multi){ if(NET.host) hostStart(); } else { startGame({seed:(Math.random()*1e9)|0, multi:false}); } };
 $('#bMenu').onclick=()=>goMenu();
@@ -1264,7 +1264,7 @@ function updateGame(dt){
   G.t+=dt;
   const moving = STATE.mode==='play' || (STATE.mode==='giantwalk');
   if(STATE.mode==='play'){
-    const target=Math.min(15, 3.4+10.5*(G.coins/G.count)+1.2*(G.passed/G.count));   // cuanto más acertás, más rápido vas
+    const target=Math.min(15, 3.4+10.5*(G.hits/G.count)+1.2*(G.passed/G.count));   // cuanto más acertás, más rápido vas
     G.speed=lerp(G.speed,target,dt*1.5); G.camZ-=G.speed*dt;
     while(G.passed<G.items.length && G.items[G.passed].z > G.camZ+0.8){ const it=G.items[G.passed]; if(!it.done){ it.done=true; if(it.obj) popText('¡uy!', it.obj.getWorldPosition(new THREE.Vector3()).setY(0.9),'miss'); } G.passed++; $('#progress').textContent=`🎃 ${G.passed}/${G.count}`; }
     if(G.passed>=G.items.length){ STATE.mode='giantwalk'; G.giant=makeGiant(); }
