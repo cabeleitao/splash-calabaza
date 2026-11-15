@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover,interactive-widget=resizes-visual">
 <title>Splash Calabaza</title>
 <meta name="description" content="Aplastá calabazas, juntá monedas y terminá bailando en la calabaza gigante.">
 <meta name="theme-color" content="#f07a1a">
@@ -10,6 +10,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Splash Calabaza">
 <meta property="og:title" content="Splash Calabaza">
@@ -21,9 +22,10 @@
 <style>
 :root{--or:#f07a1a;--or2:#ff9a2e;--ink:#1d1208;--cream:#fff4e2}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%;overflow:hidden;background:#ffb066;font-family:'Baloo 2',system-ui,sans-serif;color:var(--ink);user-select:none;-webkit-user-select:none;touch-action:manipulation}
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;}
+body{position:fixed;inset:0;width:100%;background:#ffb066;font-family:'Baloo 2',system-ui,sans-serif;color:var(--ink);user-select:none;-webkit-user-select:none;touch-action:manipulation}
 #c{position:fixed;inset:0;width:100%;height:100%;display:block}
-.scr{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;padding:18px;gap:14px;pointer-events:none}
+.scr{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;padding:max(18px,env(safe-area-inset-top)) 18px max(18px,env(safe-area-inset-bottom));gap:14px;pointer-events:none}
 .scr.on{display:flex}
 .scr > *{pointer-events:auto}
 .hand{font-family:'Gochi Hand',cursive}
@@ -616,10 +618,18 @@ const ballTex=canvasTex(512,256,(x,w,h)=>{ x.fillStyle='#ffffff'; x.fillRect(0,0
   const pent=(cx,cy,r)=>{ x.beginPath(); for(let k=0;k<5;k++){ const a=k/5*Math.PI*2-Math.PI/2; x.lineTo(cx+Math.cos(a)*r, cy+Math.sin(a)*r*1.2); } x.closePath(); x.fill(); };
   for(let row=0;row<3;row++) for(let i=0;i<6;i++){ pent(i*w/6+(row%2?w/12:0)+20, 30+row*h/3, 26); }
   x.strokeStyle='#555'; x.lineWidth=3; for(let i=0;i<12;i++){ x.beginPath(); x.moveTo(i*w/12,0); x.lineTo(i*w/12+30,h); x.stroke(); } });
-const ballMat=toon(0xffffff,{map:ballTex}); const BALLGEO=new THREE.SphereGeometry(1,32,24);
-function makeBall(r){ const g=new THREE.Group(); const m=new THREE.Mesh(BALLGEO,ballMat.clone()); m.castShadow=true; g.add(m); const o=new THREE.Mesh(BALLGEO,OL(0.03)); o.userData.ol=true; g.add(o); g.scale.setScalar(r); g.userData.body=m; return g; }
+const ballMat=toon(0xffffff,{map:ballTex});
+// calabaza con forma de pelota: gajos de calabaza, pintada como pelota de fútbol, con cabito y hojas
+const BALLGEO=(()=>{ const g=new THREE.SphereGeometry(1,48,32); const p=g.attributes.position, v=new THREE.Vector3();
+  for(let i=0;i<p.count;i++){ v.fromBufferAttribute(p,i); const th=Math.atan2(v.z,v.x); const hr=Math.min(1,Math.hypot(v.x,v.z));
+    const groove=Math.pow(1-Math.abs(Math.sin(th*8/2)),2.6); const r=1-0.075*groove*Math.min(1,hr*1.4); v.x*=r; v.z*=r; v.y=v.y*0.86-Math.sign(v.y)*0.1*Math.pow(1-hr,1.6); p.setXYZ(i,v.x,v.y,v.z); }
+  g.computeVertexNormals(); return g; })();
+function makeBall(r){ const g=new THREE.Group(); const m=new THREE.Mesh(BALLGEO,ballMat.clone()); m.castShadow=true; g.add(m); const o=new THREE.Mesh(BALLGEO,OL(0.03)); o.userData.ol=true; g.add(o);
+  const st=new THREE.Mesh(STEMGEO, stemMat); st.position.y=0.86; st.rotation.z=0.25; g.add(st);
+  for(let i=0;i<2;i++){ const l=new THREE.Mesh(LEAFGEO, leafMat); l.position.y=0.76; l.rotation.y=i*2.6+0.5; l.scale.setScalar(0.9); g.add(l); }
+  g.scale.setScalar(r); g.userData.body=m; return g; }
 function makeBallTarget(side){ const g=new THREE.Group(); const cluster=new THREE.Group(); g.add(cluster);
-  const ball=makeBall(0.62); ball.position.set(-side*0.3,0.7,0); cluster.add(ball);
+  const ball=makeBall(0.66); ball.position.set(-side*0.3,0.64,0); cluster.add(ball);
   const ring=new THREE.Mesh(new THREE.TorusGeometry(0.9,0.06,8,40), new THREE.MeshBasicMaterial({color:0xffe14a})); ring.rotation.x=Math.PI/2; ring.position.set(-side*0.3,0.05,0); cluster.add(ring);
   g.position.x=side*VINE_X; g.userData={cluster, main:ball, ball:true}; return g; }
 // escena del penal
@@ -966,7 +976,7 @@ function checkWinner(){
 
 
 /* ================= cuentas, amigos, tienda y monedas ================= */
-const APP_VERSION='v2.1';
+const APP_VERSION='v2.2';
 $('#ver').textContent=APP_VERSION;
 const ACC={ enabled: !!(window.SPLASH_CONFIG||{}).accounts, user:null, guest:false };
 const TOKEN={ get(){ try{ return localStorage.getItem('sc_token'); }catch(e){ return null; } }, set(t){ try{ t? localStorage.setItem('sc_token',t) : localStorage.removeItem('sc_token'); }catch(e){} } };
@@ -1230,6 +1240,14 @@ addEventListener('keydown',e=>{ if(e.repeat) return; const k=e.key.toLowerCase()
 function resize(){ const w=innerWidth,h=innerHeight; renderer.setSize(w,h,false); pCam.aspect=w/h; pCam.fov= w<h? 70:50; pCam.updateProjectionMatrix(); cam.aspect=w/h; cam.fov = w<h? 84:66; cam.updateProjectionMatrix(); dCam.aspect=w/h; dCam.fov = w<h? 50:42; dCam.updateProjectionMatrix(); layoutSelect();
   if(G&&G.arm){ const portrait=w<h; G.arm.position.set(portrait?0.14:0.46, portrait?-0.34:-0.3, -1.1); G.arm.scale.setScalar(portrait?0.9:1); } }
 addEventListener('resize',resize);
+// iPhone: al cerrar el teclado la pantalla puede quedar corrida o achicada. La volvemos a acomodar.
+function fixViewport(){ if(window.scrollX||window.scrollY) window.scrollTo(0,0); document.documentElement.scrollTop=0; document.body.scrollTop=0; resize(); }
+document.addEventListener('focusout',()=>{ setTimeout(fixViewport,60); setTimeout(fixViewport,400); });
+addEventListener('orientationchange',()=>setTimeout(fixViewport,300));
+if(window.visualViewport) visualViewport.addEventListener('resize',()=>setTimeout(fixViewport,50));
+addEventListener('pageshow',()=>setTimeout(fixViewport,50));
+setInterval(()=>{ const c=renderer.domElement; if(Math.abs(c.clientHeight-innerHeight)>2 || Math.abs(c.clientWidth-innerWidth)>2 || window.scrollY) fixViewport();
+  else { const sz=renderer.getSize(new THREE.Vector2()); if(Math.abs(sz.y-innerHeight)>2||Math.abs(sz.x-innerWidth)>2) resize(); } },700);
 
 const clock=new THREE.Clock(); let T=0;
 function updateSelect(dt){
@@ -1259,7 +1277,7 @@ function updateGame(dt){
   for(let i=Math.max(0,G.passed-6);i<G.passed;i++){ const it=G.items[i]; if(it.obj && it.z>G.camZ+6){ scene.remove(it.obj); it.obj=null; } }
   // brillo de la zona de golpe
   for(let i=G.passed;i<Math.min(G.items.length,G.passed+8);i++){ const it=G.items[i]; if(!it.obj||it.done) continue; const d=G.camZ-it.z; const inZ=d>-0.6&&d<7.5;
-    const m=it.obj.userData.main.userData.body.material; m.emissive.setRGB(inZ?0.35+0.25*Math.sin(T*14):0, inZ?0.12:0, 0); it.obj.userData.cluster.rotation.y=Math.sin(T*2+i)*0.08; }
+    const m=it.obj.userData.main.userData.body.material; if(it.ball){ const k=inZ?0.12+0.12*Math.sin(T*14):0; m.emissive.setRGB(k,k,k*0.6); } else m.emissive.setRGB(inZ?0.35+0.25*Math.sin(T*14):0, inZ?0.12:0, 0); it.obj.userData.cluster.rotation.y=Math.sin(T*2+i)*0.08; }
   // cámara
   const bob = moving? Math.sin(G.t*G.speed*1.9)*0.05 : 0;
   let sx=0, sy=0; if(G.shake>0){ G.shake-=dt; sx=(Math.random()-0.5)*G.shake*0.4; sy=(Math.random()-0.5)*G.shake*0.4; }
